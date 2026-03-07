@@ -18,28 +18,6 @@ The system encrypts user financial inputs, sends encrypted data to a compute ser
 
 ---
 
-# 🏗 System Architecture
-Client Machine
-│
-│ Encrypt financial data
-▼
-Encrypted Packet
-│
-│
-▼
-Secure HE Compute Server (Docker Container)
-│
-│ Homomorphic computation
-▼
-Encrypted Result
-│
-│
-▼
-Client Decrypts Result
-
-
----
-
 # 🧠 Input Features
 
 The credit risk model uses the following inputs:
