@@ -1,6 +1,5 @@
 import streamlit as st
 import time
-import streamlit.components.v1 as components
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -13,58 +12,14 @@ from model.risk_model import WEIGHTS, BIAS
 from model.plaintext_model import compute_plain
 
 
-st.set_page_config(page_title="Homomorphic Encryption Demo", layout="wide")
+st.set_page_config(page_title="Privacy-Preserving Credit Risk Scoring", layout="wide")
 
-st.title("🔐 Privacy-Preserving Credit Risk Scoring")
-
-
-# -----------------------------------------------------
-# Pipeline Indicator
-# -----------------------------------------------------
-
-def pipeline_indicator(step):
-
-    steps = ["Client", "Encryption", "Encrypted Server", "Decryption"]
-    colors = ["#4CAF50", "#FFC107", "#2196F3", "#FF7043"]
-
-    html = """
-    <style>
-    .pipeline {display:flex;width:100%;font-weight:bold;}
-    .step {
-        flex:1;
-        padding:16px;
-        text-align:center;
-        border-radius:10px;
-        margin-right:6px;
-        color:white;
-        transition:all 0.4s ease;
-    }
-    </style>
-    <div class="pipeline">
-    """
-
-    for i, name in enumerate(steps):
-
-        border = "4px solid black" if i == step else "1px solid #ddd"
-
-        html += f"""
-        <div class="step"
-        style="background:{colors[i]};border:{border};">
-        {name}
-        </div>
-        """
-
-    html += "</div>"
-
-    components.html(html, height=80)
+st.title("🔐 Privacy-Preserving Credit Risk Scoring Demo")
 
 
-pipeline_placeholder = st.empty()
-
-
-# -----------------------------------------------------
-# Attack Simulation Popup
-# -----------------------------------------------------
+# -----------------------------
+# Attack Simulation Dialog
+# -----------------------------
 
 @st.dialog("⚠️ Live Attack Simulation")
 def attack_simulation():
@@ -74,8 +29,6 @@ def attack_simulation():
         return
 
     st.warning("Attacker intercepted network traffic.")
-
-    st.markdown("### Captured Packet Metadata")
 
     st.write("Timestamp:", st.session_state.packet_time)
     st.write("Ciphertext Size:", st.session_state.cipher_size, "bytes")
@@ -106,11 +59,11 @@ def attack_simulation():
     st.success("Homomorphic encryption keeps financial data private.")
 
 
-# -----------------------------------------------------
+# -----------------------------
 # Input Section
-# -----------------------------------------------------
+# -----------------------------
 
-st.markdown("### Input Financial Features")
+st.markdown("## Input Financial Data")
 
 col1, col2, col3 = st.columns(3)
 
@@ -126,60 +79,43 @@ with col3:
     employment_years = st.number_input("Employment Years", value=5)
     open_loans = st.number_input("Open Loans", value=2)
 
-st.markdown("---")
+
+x = [
+    income,
+    loan,
+    credit_score,
+    debt_ratio,
+    employment_years,
+    open_loans
+]
 
 
-# -----------------------------------------------------
-# Compute
-# -----------------------------------------------------
+# -----------------------------
+# Compute Button
+# -----------------------------
 
 if st.button("Compute Risk Score"):
 
-    progress = st.progress(0)
+    st.markdown("---")
 
-    x = [
-        income,
-        loan,
-        credit_score,
-        debt_ratio,
-        employment_years,
-        open_loans
-    ]
+    # Plaintext compute
+    start_plain = time.time()
 
+    plaintext_score = compute_plain(x, WEIGHTS, BIAS)
+
+    plaintext_compute_time = time.time() - start_plain
+
+
+    # HE Context
     context = create_context()
 
-    col_client, col_server = st.columns(2)
-
-
-    # CLIENT INPUT
-    with pipeline_placeholder:
-        pipeline_indicator(0)
-
-    with col_client:
-        st.markdown("## 🧑 Client Machine")
-        st.info("User Inputs Financial Data")
-        st.write("Feature Vector:", x)
-
-    with col_server:
-        st.markdown("## ☁ Secure HE Compute Server")
-        st.caption("Running TenSEAL homomorphic computation")
-
-    progress.progress(10)
-    time.sleep(1)
-
-
-    # ENCRYPTION
-    with pipeline_placeholder:
-        pipeline_indicator(1)
-
-    with col_client:
-        st.warning("Encrypting Data (CKKS)")
-
+    # Encryption
     start_enc = time.time()
-    enc_x = encrypt_vector(context, x)
-    end_enc = time.time()
 
-    encryption_time = end_enc - start_enc
+    enc_x = encrypt_vector(context, x)
+
+    encryption_time = time.time() - start_enc
+
 
     serialized = enc_x.serialize()
 
@@ -188,130 +124,132 @@ if st.button("Compute Risk Score"):
     st.session_state.vector_len = len(x)
     st.session_state.packet_time = time.strftime("%H:%M:%S")
 
-    with col_client:
-        st.success("Encryption Completed")
-        st.write("Encryption Time:", round(encryption_time,6),"seconds")
-        st.write("Ciphertext Size:", len(serialized),"bytes")
 
-    progress.progress(40)
-    time.sleep(1)
-
-
-    # SERVER COMPUTE
-    with pipeline_placeholder:
-        pipeline_indicator(2)
-
-    with col_server:
-        st.warning("Homomorphic Computation Running")
-
+    # HE Compute
     start_compute = time.time()
+
     enc_score = encrypted_linear_score(enc_x, WEIGHTS, BIAS)
-    end_compute = time.time()
 
-    compute_time = end_compute - start_compute
-
-    with col_server:
-        st.success("Encrypted Computation Completed")
-        st.write("Server Compute Time:", round(compute_time,6),"seconds")
-
-    progress.progress(70)
-    time.sleep(1)
+    compute_time = time.time() - start_compute
 
 
-    # DECRYPTION
-    with pipeline_placeholder:
-        pipeline_indicator(3)
-
-    with col_client:
-        st.warning("Decrypting Result")
-
+    # Decrypt
     start_dec = time.time()
-    score = decrypt_vector(enc_score)[0]
-    end_dec = time.time()
 
-    decrypt_time = end_dec - start_dec
+    he_score = decrypt_vector(enc_score)[0]
 
-    with col_client:
-        st.success("Decryption Completed")
-        st.write("Decryption Time:", round(decrypt_time,6),"seconds")
-
-    progress.progress(90)
-    time.sleep(1)
+    decrypt_time = time.time() - start_dec
 
 
-    # RESULTS
-    plain_start = time.time()
-    plain_score = compute_plain(x, WEIGHTS, BIAS)
-    plain_end = time.time()
-
-    plaintext_time = plain_end - plain_start
-
-    total_time = encryption_time + compute_time + decrypt_time
-
-    progress.progress(100)
-
-    st.markdown("## 🎯 Final Results")
-
-    st.write("HE Risk Score:", round(score,4))
-    st.write("Plaintext Baseline:", round(plain_score,4))
-    st.write("Total HE Processing Time:", round(total_time,6),"seconds")
+    total_he_time = encryption_time + compute_time + decrypt_time
 
 
-    # -----------------------------------------------------
+    # -----------------------------
+    # Results Section
+    # -----------------------------
+
+    st.markdown("## Results")
+
+    col_plain, col_he = st.columns(2)
+
+    # Plaintext column
+    with col_plain:
+
+        st.subheader("📄 Plaintext Processing")
+
+        st.metric(
+            "Risk Score",
+            f"{plaintext_score:.5f}"
+        )
+
+        st.metric(
+            "Server Compute Time",
+            f"{plaintext_compute_time:.6f} seconds"
+        )
+
+
+    # HE column
+    with col_he:
+
+        st.subheader("🔐 Homomorphic Encryption")
+
+        st.metric(
+            "HE Score",
+            f"{he_score:.5f}"
+        )
+
+        st.metric(
+            "Encryption Time",
+            f"{encryption_time:.6f} seconds"
+        )
+
+        st.metric(
+            "Server Compute Time",
+            f"{compute_time:.6f} seconds"
+        )
+
+        st.metric(
+            "Decryption Time",
+            f"{decrypt_time:.6f} seconds"
+        )
+
+        st.metric(
+            "Total HE Time",
+            f"{total_he_time:.6f} seconds"
+        )
+
+
+    # Correctness check
+    st.success(
+        f"Difference between Plaintext and HE score: {abs(plaintext_score - he_score):.8f}"
+    )
+
+
+    # -----------------------------
     # Performance Charts
-    # -----------------------------------------------------
+    # -----------------------------
 
-    st.markdown("## 📊 Performance Comparison")
+    st.markdown("## Performance Comparison")
 
-    col1, col2, col3 = st.columns(3)
+    col_chart1, col_chart2 = st.columns(2)
 
-    with col1:
+    with col_chart1:
 
-        df_compare = pd.DataFrame({
+        df = pd.DataFrame({
             "Method": ["Plaintext", "Homomorphic Encryption"],
-            "Time": [plaintext_time, total_time]
+            "Time": [plaintext_compute_time, total_he_time]
         })
 
-        fig1, ax1 = plt.subplots()
-        ax1.bar(df_compare["Method"], df_compare["Time"])
-        ax1.set_title("Plaintext vs HE")
-        ax1.set_ylabel("Seconds")
+        fig, ax = plt.subplots()
 
-        st.pyplot(fig1)
+        ax.bar(df["Method"], df["Time"])
 
-    with col2:
+        ax.set_ylabel("Time (seconds)")
+        ax.set_title("Plaintext vs HE Total Time")
 
-        df_breakdown = pd.DataFrame({
-            "Stage": ["Encryption", "Compute", "Decryption"],
+        st.pyplot(fig)
+
+
+    with col_chart2:
+
+        df2 = pd.DataFrame({
+            "Stage": ["Encryption", "Computation", "Decryption"],
             "Time": [encryption_time, compute_time, decrypt_time]
         })
 
         fig2, ax2 = plt.subplots()
-        ax2.bar(df_breakdown["Stage"], df_breakdown["Time"])
+
+        ax2.bar(df2["Stage"], df2["Time"])
+
+        ax2.set_ylabel("Time (seconds)")
         ax2.set_title("HE Processing Breakdown")
 
         st.pyplot(fig2)
 
-    with col3:
 
-        plaintext_size = len(str(x).encode())
-        cipher_size = len(serialized)
-
-        df_size = pd.DataFrame({
-            "Type": ["Plaintext", "Ciphertext"],
-            "Size": [plaintext_size, cipher_size]
-        })
-
-        fig3, ax3 = plt.subplots()
-        ax3.bar(df_size["Type"], df_size["Size"])
-        ax3.set_title("Ciphertext Expansion")
-
-        st.pyplot(fig3)
-
-
-# -----------------------------------------------------
+# -----------------------------
 # Attack Simulation Button
-# -----------------------------------------------------
+# -----------------------------
 
 st.markdown("---")
 
